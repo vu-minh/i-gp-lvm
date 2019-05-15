@@ -27,7 +27,7 @@ pyro.enable_validation(True)
 pyro.set_rng_seed(1)
 
 
-def run_gplvm(y):
+def run_gplvm(y, informative_prior=True):
     # the latent variables are X (in the tut, X is called Latent Space)
     # dim(X) = 2 to describe 2 aspects:
     #   + capture-time (1,2,4,8,32,64) (6 stages)
@@ -52,7 +52,9 @@ def run_gplvm(y):
 
     # setup the mean of the prior over X
     X_prior_mean = torch.zeros(y.size(1), 2)  # n_observations x x_sim
-    X_prior_mean[:, 0] = capture_time_normalized
+    if informative_prior:
+        X_prior_mean[:, 0] = capture_time_normalized
+
     # note that X has 2 features
     # the first feature we set the prior to capture_time_normalized (this is just the prior)
     # this will be changed in the posterior
@@ -83,7 +85,7 @@ def run_gplvm(y):
     print(f"Training GP-LVM in {time.time() - t} seconds")
 
     plt.plot(losses)
-    plt.savefig("gplvm_losses.png")
+    plt.savefig("./plots/gplvm_losses.png")
 
     # now the mean and std of X (in q(X) ~ p(X|y)) will be store in X_loc and X_scale
     # important: to get sample from q(X), set `mode` of `gplvm` to `guide`
@@ -91,6 +93,8 @@ def run_gplvm(y):
     X = gplvm.X_loc.detach().numpy()
 
     viz(X, name="gplvm")
+    viz_bokeh(X, name=("gplvm_with_prior" if informative_prior
+                       else "gplvm_non_informative_prior"))
 
 
 # viz X in 2D
@@ -112,16 +116,53 @@ def viz(X, name, show_label=True):
     plt.savefig(f"./plots/qPCR_{name}.png")
 
 
+def viz_bokeh(X, name, show_label=True):
+    from bokeh.palettes import Spectral10 as spectral_color  # Category10  # Accent
+    from bokeh.plotting import figure, output_file, show
+    from bokeh.models import BoxSelectTool
+
+    import math
+
+    labels = df.index.unique()
+
+    p = figure(
+        plot_width=800,
+        plot_height=600,
+        title=f"{name} qPCR dataset, 48 genes",
+    )
+
+    for i, (label, color) in enumerate(zip(labels, spectral_color)):
+        X_i = X[df.index == label]
+        p.scatter(X_i[:, 0], X_i[:, 1],
+                  radius=0.1,
+                  color=color, alpha=0.7,
+                  muted_color=color, muted_alpha=0.2,
+                  legend=label)
+
+    # p.legend.location = "top_left"
+    p.legend.click_policy = "mute"  # "hide"
+    p.add_tools(BoxSelectTool())
+
+    if show_label:
+        p.xaxis.axis_label = "pseudo-time"
+        p.yaxis.axis_label = "branching"
+
+    output_file(f"./plots/qPCR_{name}_bokeh.html")
+    show(p)
+
+
 def run_tsne(y, perp=20):
     tsne = TSNE(perplexity=perp)
     Z = tsne.fit_transform(y)
     viz(Z, f"tsne_p{perp}", show_label=False)
+    viz_bokeh(Z, f"tsne_p{perp}", show_label=False)
 
 
 def run_pca(y):
     pca = PCA(n_components=2)
     Z = pca.fit_transform(y)
     viz(Z, "pca", show_label=False)
+    viz_bokeh(Z, "pca", show_label=False)
 
 
 if __name__ == "__main__":
@@ -144,8 +185,8 @@ if __name__ == "__main__":
     print(y.shape)
 
     # test different DR methods
-    run_gplvm(y)
+    # run_gplvm(y)
     # run_tsne(data, perp=20)
     # run_tsne(data, perp=10)
     # run_tsne(data, perp=35)
-    # run_pca(data)
+    run_pca(data)
