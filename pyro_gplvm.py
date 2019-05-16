@@ -19,6 +19,16 @@ import pyro.ops.stats as stats
 
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+import umap
+
+from bokeh.palettes import Spectral10 as spectral_color  # Category10  # Accent
+from bokeh.plotting import figure, output_file, show
+from bokeh.models import BoxSelectTool
+
+from bokeh.layouts import gridplot
+from bokeh.palettes import Viridis3
+
+import math
 
 
 assert pyro.__version__.startswith("0.3.0")
@@ -92,9 +102,10 @@ def run_gplvm(y, informative_prior=True):
     gplvm.mode = "guide"  # default: "model"
     X = gplvm.X_loc.detach().numpy()
 
-    viz(X, name="gplvm")
-    viz_bokeh(X, name=("gplvm_with_prior" if informative_prior
-                       else "gplvm_non_informative_prior"))
+    return X
+    # viz(X, name="gplvm")
+    # viz_bokeh(X, name=("gplvm_with_prior" if informative_prior
+    #                    else "gplvm_non_informative_prior"))
 
 
 # viz X in 2D
@@ -116,12 +127,46 @@ def viz(X, name, show_label=True):
     plt.savefig(f"./plots/qPCR_{name}.png")
 
 
-def viz_bokeh(X, name, show_label=True):
-    from bokeh.palettes import Spectral10 as spectral_color  # Category10  # Accent
-    from bokeh.plotting import figure, output_file, show
-    from bokeh.models import BoxSelectTool
+def viz_bokeh_group(y):
+    w = 500
+    h = 300
+    tooltips_bigger_font = """
+        <div>
+            <span style="font-size: 18px; font-weight: bold;">stage: $name</span>
+        </div>
+    """
 
-    import math
+    pca = PCA(n_components=2)
+    Z1 = pca.fit_transform(y)
+    p1 = figure(plot_width=w, plot_height=h, title="PCA",
+                tooltips=tooltips_bigger_font)
+    p1 = viz_bokeh(Z1, name="PCA", show_label=False, show_legend=True, p=p1)
+
+    tsne = TSNE(perplexity=20)
+    Z2 = tsne.fit_transform(y)
+    p2 = figure(plot_width=w, plot_height=h, title="t-SNE_perp20",
+                tooltips=tooltips_bigger_font)
+    p2 = viz_bokeh(Z2, name="", show_label=False,
+                   show_legend=False, p=p2)
+
+    Z3 = umap.UMAP(n_neighbors=20).fit_transform(y)
+    p3 = figure(plot_width=w, plot_height=h, title="UMAP_neighbors20",
+                tooltips=tooltips_bigger_font)
+    p3 = viz_bokeh(Z3, name="", show_label=False,
+                   show_legend=False, p=p3)
+
+    Z4 = run_gplvm(y.t(), informative_prior=False)
+    p4 = figure(plot_width=w, plot_height=h,
+                title="GP-LVM Non-informative prior")
+    p4 = viz_bokeh(Z4, name="", show_label=False,
+                   show_legend=False, p=p4)
+
+    grid = gridplot([[p1, p2], [p3, p4]])
+    output_file(f"./plots/qPCR_bokeh_group1.html")
+    show(grid)
+
+
+def viz_bokeh(X, name="", show_label=True, show_legend=True, p=None):
 
     labels = df.index.unique()
     tooltips_default = [
@@ -133,18 +178,21 @@ def viz_bokeh(X, name, show_label=True):
         </div>
     """
 
-    p = figure(
-        plot_width=800,
-        plot_height=600,
-        tooltips=tooltips_bigger_font,
-        title=f"{name} qPCR dataset, 48 genes",
-    )
+    if p is None:
+        p = figure(
+            plot_width=800,
+            plot_height=600,
+            tooltips=tooltips_bigger_font,
+            title=f"{name} qPCR dataset, 48 genes",
+        )
+    p.add_tools(BoxSelectTool())
 
     for i, (label, color) in enumerate(zip(labels, spectral_color)):
         X_i = X[df.index == label]
 
         p.circle(X_i[:, 0], X_i[:, 1],
-                 radius=0.1,
+                 # radius=0.1,
+                 size=10,
                  color=color,
                  alpha=0.6,
                  muted_color=color,
@@ -152,18 +200,20 @@ def viz_bokeh(X, name, show_label=True):
                  selection_fill_color=color,
                  selection_fill_alpha=1.0,
                  nonselection_fill_alpha=0.2,
-                 legend=label, name=label)
-
-    # p.legend.location = "top_left"
-    p.legend.click_policy = "mute"  # "hide"
-    p.add_tools(BoxSelectTool())
+                 legend=(label if show_legend else None), name=label)
+    if show_legend:
+        # p.legend.location = "top_left"
+        p.legend.click_policy = "mute"  # "hide"
 
     if show_label:
         p.xaxis.axis_label = "pseudo-time"
         p.yaxis.axis_label = "branching"
 
-    output_file(f"./plots/qPCR_{name}_bokeh.html")
-    show(p)
+    if p is None:
+        output_file(f"./plots/qPCR_{name}_bokeh.html")
+        show(p)
+    else:
+        return p
 
 
 def run_tsne(y, perp=20):
@@ -204,4 +254,6 @@ if __name__ == "__main__":
     # run_tsne(data, perp=20)
     # run_tsne(data, perp=10)
     # run_tsne(data, perp=35)
-    run_pca(data)
+    # run_pca(data)
+
+    viz_bokeh_group(data)
