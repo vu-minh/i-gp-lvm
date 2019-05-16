@@ -38,6 +38,8 @@ pyro.set_rng_seed(1)
 
 
 def run_gplvm(y, informative_prior=True):
+    pyro.set_rng_seed(1)
+
     # the latent variables are X (in the tut, X is called Latent Space)
     # dim(X) = 2 to describe 2 aspects:
     #   + capture-time (1,2,4,8,32,64) (6 stages)
@@ -52,13 +54,13 @@ def run_gplvm(y, informative_prior=True):
     capture_time_normalized = capture_time.log2() / 6  # in range [0, 1]
 
     # try to corrupt this supervised info, e.g., let keep 10% of them
-    print(capture_time_normalized.shape)
-    mask = torch.randint(
-        low=0,
-        high=capture_time_normalized.size(0),
-        size=(int(0.9 * capture_time_normalized.size(0)),),
-    )
-    capture_time_normalized[mask] = -0.1
+    # print(capture_time_normalized.shape)
+    # mask = torch.randint(
+    #     low=0,
+    #     high=capture_time_normalized.size(0),
+    #     size=(int(0.9 * capture_time_normalized.size(0)),),
+    # )
+    # capture_time_normalized[mask] = -0.1
 
     # setup the mean of the prior over X
     X_prior_mean = torch.zeros(y.size(1), 2)  # n_observations x x_sim
@@ -102,10 +104,11 @@ def run_gplvm(y, informative_prior=True):
     gplvm.mode = "guide"  # default: "model"
     X = gplvm.X_loc.detach().numpy()
 
-    return X
-    # viz(X, name="gplvm")
+    viz(X, name="gplvm")
     # viz_bokeh(X, name=("gplvm_with_prior" if informative_prior
     #                    else "gplvm_non_informative_prior"))
+    return X
+
 
 
 # viz X in 2D
@@ -157,12 +160,38 @@ def viz_bokeh_group(y):
 
     Z4 = run_gplvm(y.t(), informative_prior=False)
     p4 = figure(plot_width=w, plot_height=h,
-                title="GP-LVM Non-informative prior")
+                title="GP-LVM Non-informative prior", tooltips=tooltips_bigger_font)
     p4 = viz_bokeh(Z4, name="", show_label=False,
                    show_legend=False, p=p4)
 
     grid = gridplot([[p1, p2], [p3, p4]])
     output_file(f"./plots/qPCR_bokeh_group1.html")
+    show(grid)
+
+
+def viz_gplvm_group(y):
+    w = 500
+    h = 450
+    tooltips_bigger_font = """
+        <div>
+            <span style="font-size: 18px; font-weight: bold;">stage: $name</span>
+        </div>
+    """
+
+    Z3 = run_gplvm(y, informative_prior=False)
+    p3 = figure(plot_width=w, plot_height=h, tooltips=tooltips_bigger_font,
+                title="GP-LVM Non-Informative prior")
+    p3 = viz_bokeh(Z3, name="", show_label=False,
+                   show_legend=False, p=p3)
+
+    Z4 = run_gplvm(y, informative_prior=True)
+    p4 = figure(plot_width=w, plot_height=h, tooltips=tooltips_bigger_font,
+                title="GP-LVM Informative prior")
+    p4 = viz_bokeh(Z4, name="", show_label=True,
+                   show_legend=False, p=p4)
+
+    grid = gridplot([[p3, p4]])
+    output_file(f"./plots/qPCR_bokeh_group2.html")
     show(grid)
 
 
@@ -250,10 +279,11 @@ if __name__ == "__main__":
     print(y.shape)
 
     # test different DR methods
-    # run_gplvm(y)
+    run_gplvm(y)
     # run_tsne(data, perp=20)
     # run_tsne(data, perp=10)
     # run_tsne(data, perp=35)
     # run_pca(data)
 
     viz_bokeh_group(data)
+    viz_gplvm_group(y)
