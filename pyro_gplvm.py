@@ -124,20 +124,35 @@ def viz_bokeh(X, name, show_label=True):
     import math
 
     labels = df.index.unique()
+    tooltips_default = [
+        ("stage", "$name"),
+    ]
+    tooltips_bigger_font = """
+        <div>
+            <span style="font-size: 18px; font-weight: bold;">stage: $name</span>
+        </div>
+    """
 
     p = figure(
         plot_width=800,
         plot_height=600,
+        tooltips=tooltips_bigger_font,
         title=f"{name} qPCR dataset, 48 genes",
     )
 
     for i, (label, color) in enumerate(zip(labels, spectral_color)):
         X_i = X[df.index == label]
-        p.scatter(X_i[:, 0], X_i[:, 1],
-                  radius=0.1,
-                  color=color, alpha=0.7,
-                  muted_color=color, muted_alpha=0.2,
-                  legend=label)
+
+        p.circle(X_i[:, 0], X_i[:, 1],
+                 radius=0.1,
+                 color=color,
+                 alpha=0.6,
+                 muted_color=color,
+                 muted_alpha=0.2,
+                 selection_fill_color=color,
+                 selection_fill_alpha=1.0,
+                 nonselection_fill_alpha=0.2,
+                 legend=label, name=label)
 
     # p.legend.location = "top_left"
     p.legend.click_policy = "mute"  # "hide"
